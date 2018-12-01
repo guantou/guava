@@ -129,8 +129,12 @@ public abstract class RateLimiter {
   }
 
   @VisibleForTesting
+  // 根据指定稳定吞吐率，创建一个限流器
+  // permitsPerSecond 每秒限制的令牌数（Qps）
   static RateLimiter create(double permitsPerSecond, SleepingStopwatch stopwatch) {
+    // maxBurstSeconds 桶容量时间单位，允许将多长时间生成的口令存在桶中。默认1s， 桶容量 = 1 * qps 的请求量
     RateLimiter rateLimiter = new SmoothBursty(stopwatch, 1.0 /* maxBurstSeconds */);
+    // 指定吞吐率，也就是令牌发放速度
     rateLimiter.setRate(permitsPerSecond);
     return rateLimiter;
   }
