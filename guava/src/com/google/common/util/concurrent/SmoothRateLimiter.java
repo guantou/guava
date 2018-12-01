@@ -283,16 +283,22 @@ abstract class SmoothRateLimiter extends RateLimiter {
     }
 
     @Override
+    // 设置/更新令牌生成速率（qps)
     void doSetRate(double permitsPerSecond, double stableIntervalMicros) {
+      // 设置速率之前的桶容量，初始化时的容量
       double oldMaxPermits = this.maxPermits;
+      // 新的最大容量 最大桶保留时间 * qps
       maxPermits = maxBurstSeconds * permitsPerSecond;
+      // 如果旧的桶容量无穷大 - 当前桶内保留的令牌数,以新的桶容量标准塞满
       if (oldMaxPermits == Double.POSITIVE_INFINITY) {
         // if we don't special-case this, we would get storedPermits == NaN, below
         storedPermits = maxPermits;
       } else {
+      // 初始化时setRate，不填充令牌
+      // 更新qps时setRate，桶剩余容量自动等比例更新,当前桶内保留令牌数 = 已有令牌数 * （新容量/ 旧容量）
         storedPermits =
             (oldMaxPermits == 0.0)
-                ? 0.0 // initial state
+                ? 0.0 // initial state 初始化状态
                 : storedPermits * maxPermits / oldMaxPermits;
       }
     }
@@ -331,10 +337,13 @@ abstract class SmoothRateLimiter extends RateLimiter {
   }
 
   @Override
+  // 设置/更新令牌生成速率（qps)
   final void doSetRate(double permitsPerSecond, long nowMicros) {
     resync(nowMicros);
+    // 令牌生成时间频率（每秒）
     double stableIntervalMicros = SECONDS.toMicros(1L) / permitsPerSecond;
     this.stableIntervalMicros = stableIntervalMicros;
+    // 进一步，设置/更新令牌生成速率（qps)
     doSetRate(permitsPerSecond, stableIntervalMicros);
   }
 
@@ -351,16 +360,23 @@ abstract class SmoothRateLimiter extends RateLimiter {
   }
 
   @Override
+  // 预约所需数量令牌需要等待的时间
   final long reserveEarliestAvailable(int requiredPermits, long nowMicros) {
+    // 同步时间，刷新桶余量
     resync(nowMicros);
+    // 本次预约令牌需要等待的时间：上次令牌发放后，第一批空闲令牌的支取间隔。首次默认为0
     long returnValue = nextFreeTicketMicros;
+    // 本次请求处理后，桶内将消耗多少令牌。 申请量大于余量，则为桶内全部消耗
     double storedPermitsToSpend = min(requiredPermits, this.storedPermits);
+    // 本次请求，需要补充的令牌数
     double freshPermits = requiredPermits - storedPermitsToSpend;
+    // 需等待的发放令牌的时长 = 取出令牌所需的时间（稳定速率情景 = 0）+ 需补充的令牌数 * 令牌生成时间间隔
     long waitMicros =
         storedPermitsToWaitTime(this.storedPermits, storedPermitsToSpend)
             + (long) (freshPermits * stableIntervalMicros);
-
+    // 下一批空闲令牌的支取等待时间 = 本次令牌发放前需等待的时间 + 本次令牌发放所需时间
     this.nextFreeTicketMicros = LongMath.saturatedAdd(nextFreeTicketMicros, waitMicros);
+    // 桶内令牌余量 = 余量 - 本次消耗的数量
     this.storedPermits -= storedPermitsToSpend;
     return returnValue;
   }
