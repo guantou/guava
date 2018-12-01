@@ -128,6 +128,17 @@ public abstract class RateLimiter {
     return create(permitsPerSecond, SleepingStopwatch.createFromSystemTimer());
   }
 
+  // 初始化限流器
+  final RateLimiter rateLimiter = RateLimiter.create(5000.0); // 令牌生成速率为 5000/s
+  // 业务方法
+  void submitPacket(byte[] packet) {
+    // 申请一定数量的令牌，比如此处做流量限制，根据流量的字节长度申请同等数量的令牌
+    // 如果超出阈值-桶满，则会使其等待
+    rateLimiter.acquire(packet.length);
+    // 未超出阈值或可以放行了，则流量发送到网络服务
+    networkService.send(packet);
+  }
+  
   @VisibleForTesting
   // 根据指定稳定吞吐率，创建一个限流器
   // permitsPerSecond 每秒限制的令牌数（Qps）
@@ -273,7 +284,10 @@ public abstract class RateLimiter {
    * @since 16.0 (present in 13.0 with {@code void} return type})
    */
   @CanIgnoreReturnValue
+  // 申请一定数量的令牌, 检测是否限流
+  // 如果令牌桶满, 则阻塞sleep,之后发挥已sleep的时长
   public double acquire(int permits) {
+    // 获取预约本批次令牌所需的时间
     long microsToWait = reserve(permits);
     stopwatch.sleepMicrosUninterruptibly(microsToWait);
     return 1.0 * microsToWait / SECONDS.toMicros(1L);
@@ -285,8 +299,11 @@ public abstract class RateLimiter {
    *
    * @return time in microseconds to wait until the resource can be acquired, never negative
    */
+  //预约一定数量的令牌
   final long reserve(int permits) {
+    // 参数检查
     checkPermits(permits);
+    // 预约令牌需要等待的时间
     synchronized (mutex()) {
       return reserveAndGetWaitLength(permits, stopwatch.readMicros());
     }
@@ -371,8 +388,11 @@ public abstract class RateLimiter {
    *
    * @return the required wait time, never negative
    */
+  // 预约本批次令牌需要等待的时间
   final long reserveAndGetWaitLength(int permits, long nowMicros) {
+    // 预约本批次令牌令牌需要等待的时间
     long momentAvailable = reserveEarliestAvailable(permits, nowMicros);
+    // 
     return max(momentAvailable - nowMicros, 0);
   }
 
