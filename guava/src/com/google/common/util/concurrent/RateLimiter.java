@@ -112,24 +112,12 @@ public abstract class RateLimiter {
   // TODO(user): "This is equivalent to
   // {@code createWithCapacity(permitsPerSecond, 1, TimeUnit.SECONDS)}".
   public static RateLimiter create(double permitsPerSecond) {
-    /*
-     * The default RateLimiter configuration can save the unused permits of up to one second. This
-     * is to avoid unnecessary stalls in situations like this: A RateLimiter of 1qps, and 4 threads,
-     * all calling acquire() at these moments:
-     *
-     * T0 at 0 seconds
-     * T1 at 1.05 seconds
-     * T2 at 2 seconds
-     * T3 at 3 seconds
-     *
-     * Due to the slight delay of T1, T2 would have to sleep till 2.05 seconds, and T3 would also
-     * have to sleep till 3.05 seconds.
-     */
     return create(permitsPerSecond, SleepingStopwatch.createFromSystemTimer());
   }
 
   // 初始化限流器
   final RateLimiter rateLimiter = RateLimiter.create(5000.0); // 令牌生成速率为 5000/s
+  
   // 业务方法
   void submitPacket(byte[] packet) {
     // 申请一定数量的令牌，比如此处做流量限制，根据流量的字节长度申请同等数量的令牌
@@ -285,11 +273,13 @@ public abstract class RateLimiter {
    */
   @CanIgnoreReturnValue
   // 申请一定数量的令牌, 检测是否限流
-  // 如果令牌桶满, 则阻塞sleep,之后发挥已sleep的时长
+  // 如果令牌桶满, 则阻塞sleep, 之后返回已sleep的时长
   public double acquire(int permits) {
     // 获取预约本批次令牌所需的时间
     long microsToWait = reserve(permits);
+    // 执行sleep
     stopwatch.sleepMicrosUninterruptibly(microsToWait);
+    // 返回等待了多久
     return 1.0 * microsToWait / SECONDS.toMicros(1L);
   }
 
@@ -303,8 +293,9 @@ public abstract class RateLimiter {
   final long reserve(int permits) {
     // 参数检查
     checkPermits(permits);
-    // 预约令牌需要等待的时间
+    // synchronized关键字是用来控制线程同步的，就是在多线程的环境下，控制synchronized代码段不被多个线程同时执行。
     synchronized (mutex()) {
+      // 预约本批次令牌需要等待的时间
       return reserveAndGetWaitLength(permits, stopwatch.readMicros());
     }
   }
@@ -390,9 +381,9 @@ public abstract class RateLimiter {
    */
   // 预约本批次令牌需要等待的时间
   final long reserveAndGetWaitLength(int permits, long nowMicros) {
-    // 预约本批次令牌令牌需要等待的时间
+    // 能领取本批次令牌令牌的时间戳
     long momentAvailable = reserveEarliestAvailable(permits, nowMicros);
-    // 
+    // 返回需要等待的时间
     return max(momentAvailable - nowMicros, 0);
   }
 
