@@ -360,11 +360,11 @@ abstract class SmoothRateLimiter extends RateLimiter {
   }
 
   @Override
-  // 预约所需数量令牌需要等待的时间
+  // 预约所需数量令牌，返回可以取出来的时间戳
   final long reserveEarliestAvailable(int requiredPermits, long nowMicros) {
     // 同步时间，刷新桶余量
     resync(nowMicros);
-    // 本次预约令牌需要等待的时间：上次令牌发放后，第一批空闲令牌的支取间隔。首次默认为0
+    // 本次获取令牌的时间戳：上次令牌发放后，第一批空闲令牌的支取间隔。首次默认为0
     long returnValue = nextFreeTicketMicros;
     // 本次请求处理后，桶内将消耗多少令牌。 申请量大于余量，则为桶内全部消耗
     double storedPermitsToSpend = min(requiredPermits, this.storedPermits);
@@ -374,9 +374,9 @@ abstract class SmoothRateLimiter extends RateLimiter {
     long waitMicros =
         storedPermitsToWaitTime(this.storedPermits, storedPermitsToSpend)
             + (long) (freshPermits * stableIntervalMicros);
-    // 下一批空闲令牌的支取等待时间 = 本次令牌发放前需等待的时间 + 本次令牌发放所需时间
+    // 更新下一批令牌可被支取的时间戳 = 本次令牌发放时间 + 本次令牌发放所需时间
     this.nextFreeTicketMicros = LongMath.saturatedAdd(nextFreeTicketMicros, waitMicros);
-    // 桶内令牌余量 = 余量 - 本次消耗的数量
+    // 更新桶内令牌余量 = 余量 - 本次消耗的数量
     this.storedPermits -= storedPermitsToSpend;
     return returnValue;
   }
