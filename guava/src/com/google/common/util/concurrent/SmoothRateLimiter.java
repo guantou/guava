@@ -283,7 +283,7 @@ abstract class SmoothRateLimiter extends RateLimiter {
     }
 
     @Override
-    // 设置/更新令牌生成速率（qps)
+    // 设置/更新桶容量、已存储令牌数
     void doSetRate(double permitsPerSecond, double stableIntervalMicros) {
       // 设置速率之前的桶容量，初始化时的容量
       double oldMaxPermits = this.maxPermits;
